@@ -43,33 +43,36 @@ router.post('/analyze', async (req, res) => {
 
 router.post('/fantasy-image', async (req, res) => {
   const { image_url, prompt } = req.body;
-  if (!prompt) return res.status(400).json({ error: 'Chybí prompt' });
+  if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
   try {
+    const FormData = require('form-data');
+
+    const imgResponse = await fetch(image_url);
+    const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+
+    const form = new FormData();
+    form.append('image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
+    form.append('prompt', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration');
+    form.append('negative_prompt', 'ugly, blurry, low quality, realistic photo');
+    form.append('strength', '0.7');
+    form.append('output_format', 'jpeg');
+
     const response = await fetch(
-      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
+      'https://api.stability.ai/v2beta/stable-image/generate/sd3',
       {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.STABILITY_API_KEY}`,
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...form.getHeaders()
         },
-        body: JSON.stringify({
-          text_prompts: [
-            { text: prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration, epic tree', weight: 1 },
-            { text: 'ugly, blurry, low quality, realistic photo, modern', weight: -1 }
-          ],
-          cfg_scale: 7,
-          height: 1024,
-          width: 1024,
-          steps: 30,
-          samples: 1
-        })
+        body: form
       }
     );
+
     const data = await response.json();
-    if (!data.artifacts?.[0]?.base64) return res.status(500).json({ error: 'Generování selhalo', detail: data });
-    res.json({ image_base64: data.artifacts[0].base64 });
+    if (!data.image) return res.status(500).json({ error: 'Generování selhalo', detail: data });
+    res.json({ image_base64: data.image });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
