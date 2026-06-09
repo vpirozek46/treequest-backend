@@ -53,7 +53,7 @@ router.post('/analyze', async (req, res) => {
 
 router.post('/fantasy-image', async (req, res) => {
   const { image_url, prompt, tree_level, tree_id } = req.body;
-  if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
+  if (!prompt) return res.status(400).json({ error: 'Chybí data' });
 
   const level = tree_level || 0;
   const levelKey = level < 20 ? 0 : level < 40 ? 20 : level < 60 ? 40 : level < 80 ? 60 : level < 100 ? 80 : 100;
@@ -70,50 +70,53 @@ router.post('/fantasy-image', async (req, res) => {
     : 'ultimate legendary tree, godlike magical power, blinding divine light, massive ethereal crown, celestial energy, mythical beings surrounding it, most epic fantasy illustration possible';
 
   try {
-    const axios = require('axios');
-    const FormData = require('form-data');
-
-    const imgResponse = await fetch(image_url);
-    const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
-
-    const form = new FormData();
-    form.append('image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
-    form.append('prompt', prompt + ', ' + levelStyle + ', fantasy art, highly detailed illustration');
-    form.append('negative_prompt', 'ugly, blurry, low quality, realistic photo, modern buildings');
-    form.append('strength', '0.7');
-    form.append('output_format', 'jpeg');
-    form.append('mode', 'image-to-image');
-
-    const response = await axios.post(
-      'https://api.stability.ai/v2beta/stable-image/generate/sd3',
-      form,
+    const response = await fetch(
+      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
       {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.STABILITY_API_KEY}`,
-          'Accept': 'application/json',
-          ...form.getHeaders()
-        }
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          text_prompts: [
+            { text: prompt + ', ' + levelStyle + ', fantasy art, highly detailed illustration, epic tree', weight: 1 },
+            { text: 'ugly, blurry, low quality, realistic photo, modern', weight: -1 }
+          ],
+          cfg_scale: 7,
+          height: 1024,
+          width: 1024,
+          steps: 30,
+          samples: 1
+        })
       }
     );
 
-    if (!response.data.image) return res.status(500).json({ error: 'Generování selhalo', detail: response.data });
+    const data = await response.json();
+    if (!data.artifacts?.[0]?.base64) return res.status(500).json({ error: 'Generování selhalo', detail: data });
 
-    const imageBase64 = response.data.image;
+    const imageBase64 = data.artifacts[0].base64;
 
     // Uložit na Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(
-      `data:image/jpeg;base64,${imageBase64}`,
-      { folder: 'treequest/fantasy' }
-    );
+    const cloudinary = require('cloudinary').v2;
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    const uploadResult = await cloudinary.uploader.upload(`data:image/jpeg;base64,${imageBase64}`, { folder: 'treequest/fantasy' });
 
     // Uložit URL do Supabase
     if (tree_id) {
+      const { createClient } = require('@supabase/supabase-js');
+      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
       await supabase.from('trees').update({ [dbColumn]: uploadResult.secure_url }).eq('id', tree_id);
     }
 
     res.json({ image_base64: imageBase64, image_url: uploadResult.secure_url });
   } catch (err) {
-    res.status(500).json({ error: err.response?.data || err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
