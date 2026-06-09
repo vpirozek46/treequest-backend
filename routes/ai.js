@@ -43,38 +43,30 @@ router.post('/analyze', async (req, res) => {
 
 router.post('/fantasy-image', async (req, res) => {
   const { image_url, prompt } = req.body;
-  if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
+  if (!prompt) return res.status(400).json({ error: 'Chybí prompt' });
   try {
-    const FormData = require('form-data');
-
-    const imgResponse = await fetch(image_url);
-    const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
-
-    const form = new FormData();
-    form.append('init_image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
-    form.append('init_image_mode', 'IMAGE_STRENGTH');
-    form.append('image_strength', '0.35');
-    form.append('text_prompts[0][text]', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed');
-    form.append('text_prompts[0][weight]', '1');
-    form.append('text_prompts[1][text]', 'ugly, blurry, low quality, realistic photo');
-    form.append('text_prompts[1][weight]', '-1');
-    form.append('cfg_scale', '7');
-    form.append('samples', '1');
-    form.append('steps', '30');
-
     const response = await fetch(
-      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
+      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
       {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.STABILITY_API_KEY}`,
-          'Accept': 'application/json',
-          ...form.getHeaders()
+          'Accept': 'application/json'
         },
-        body: form
+        body: JSON.stringify({
+          text_prompts: [
+            { text: prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration, epic tree', weight: 1 },
+            { text: 'ugly, blurry, low quality, realistic photo, modern', weight: -1 }
+          ],
+          cfg_scale: 7,
+          height: 768,
+          width: 512,
+          steps: 30,
+          samples: 1
+        })
       }
     );
-
     const data = await response.json();
     if (!data.artifacts?.[0]?.base64) return res.status(500).json({ error: 'Generování selhalo', detail: data });
     res.json({ image_base64: data.artifacts[0].base64 });
