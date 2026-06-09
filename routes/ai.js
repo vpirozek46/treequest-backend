@@ -1,5 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const cloudinary = require('cloudinary').v2;
+const { createClient } = require('@supabase/supabase-js');
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 router.post('/analyze', async (req, res) => {
   const { image_base64, image_mime, location } = req.body;
@@ -42,10 +52,12 @@ router.post('/analyze', async (req, res) => {
 });
 
 router.post('/fantasy-image', async (req, res) => {
-  const { image_url, prompt, tree_level } = req.body;
+  const { image_url, prompt, tree_level, tree_id } = req.body;
   if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
 
   const level = tree_level || 0;
+  const levelKey = level < 20 ? 0 : level < 40 ? 20 : level < 60 ? 40 : level < 80 ? 60 : level < 100 ? 80 : 100;
+  const dbColumn = `fantasy_img_${levelKey}`;
 
   const levelStyle = level < 20
     ? 'subtle magical glow, soft ethereal light, slightly enchanted, gentle fantasy atmosphere'
@@ -85,9 +97,24 @@ router.post('/fantasy-image', async (req, res) => {
     );
 
     if (!response.data.image) return res.status(500).json({ error: 'Generování selhalo', detail: response.data });
-    res.json({ image_base64: response.data.image });
+
+    const imageBase64 = response.data.image;
+
+    // Uložit na Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(
+      `data:image/jpeg;base64,${imageBase64}`,
+      { folder: 'treequest/fantasy' }
+    );
+
+    // Uložit URL do Supabase
+    if (tree_id) {
+      await supabase.from('trees').update({ [dbColumn]: uploadResult.secure_url }).eq('id', tree_id);
+    }
+
+    res.json({ image_base64: imageBase64, image_url: uploadResult.secure_url });
   } catch (err) {
     res.status(500).json({ error: err.response?.data || err.message });
   }
 });
+
 module.exports = router;
