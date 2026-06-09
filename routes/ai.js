@@ -42,14 +42,16 @@ router.post('/analyze', async (req, res) => {
 });
 
 router.post('/fantasy-image', async (req, res) => {
-  const { image_base64, prompt } = req.body;
-  if (!image_base64 || !prompt) return res.status(400).json({ error: 'Chybí data' });
+  const { image_url, prompt } = req.body;
+  if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
   try {
     const FormData = require('form-data');
-    const form = new FormData();
 
-    const imageBuffer = Buffer.from(image_base64, 'base64');
-    form.append('init_image', imageBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
+    const imgResponse = await fetch(image_url);
+    const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+
+    const form = new FormData();
+    form.append('init_image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
     form.append('init_image_mode', 'IMAGE_STRENGTH');
     form.append('image_strength', '0.35');
     form.append('text_prompts[0][text]', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed');
