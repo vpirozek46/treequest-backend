@@ -45,17 +45,18 @@ router.post('/fantasy-image', async (req, res) => {
   const { image_url, prompt } = req.body;
   if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
   try {
-    const FormData = require('form-data');
-
     const imgResponse = await fetch(image_url);
     const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+    const imgBase64 = imgBuffer.toString('base64');
 
+    const FormData = require('form-data');
     const form = new FormData();
-    form.append('image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
+    form.append('image', imgBase64);
     form.append('prompt', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration');
     form.append('negative_prompt', 'ugly, blurry, low quality, realistic photo');
     form.append('strength', '0.7');
     form.append('output_format', 'jpeg');
+    form.append('mode', 'image-to-image');
 
     const response = await fetch(
       'https://api.stability.ai/v2beta/stable-image/generate/sd3',
@@ -77,5 +78,4 @@ router.post('/fantasy-image', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;
