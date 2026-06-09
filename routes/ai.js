@@ -42,8 +42,21 @@ router.post('/analyze', async (req, res) => {
 });
 
 router.post('/fantasy-image', async (req, res) => {
-  const { image_url, prompt } = req.body;
+  const { image_url, prompt, tree_level } = req.body;
   if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
+
+  const level = tree_level || 0;
+
+  const levelStyle = level < 20
+    ? 'subtle magical glow, soft ethereal light, slightly enchanted, gentle fantasy atmosphere'
+    : level < 40
+    ? 'moderate magical energy, glowing runes on bark, mystical forest spirits, colorful aura'
+    : level < 60
+    ? 'powerful ancient magic, bright glowing leaves, magical creatures nearby, dramatic lighting, enchanted forest'
+    : level < 80
+    ? 'epic fantasy tree, intense magical energy, golden and purple aura, floating magical particles, legendary ancient spirit'
+    : 'ultimate legendary tree, godlike magical power, blinding divine light, massive ethereal crown, celestial energy, mythical beings surrounding it, most epic fantasy illustration possible';
+
   try {
     const axios = require('axios');
     const FormData = require('form-data');
@@ -53,8 +66,8 @@ router.post('/fantasy-image', async (req, res) => {
 
     const form = new FormData();
     form.append('image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
-    form.append('prompt', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration');
-    form.append('negative_prompt', 'ugly, blurry, low quality, realistic photo');
+    form.append('prompt', prompt + ', ' + levelStyle + ', fantasy art, highly detailed illustration');
+    form.append('negative_prompt', 'ugly, blurry, low quality, realistic photo, modern buildings');
     form.append('strength', '0.7');
     form.append('output_format', 'jpeg');
     form.append('mode', 'image-to-image');
