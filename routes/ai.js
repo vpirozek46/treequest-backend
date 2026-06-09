@@ -45,37 +45,36 @@ router.post('/fantasy-image', async (req, res) => {
   const { image_url, prompt } = req.body;
   if (!image_url || !prompt) return res.status(400).json({ error: 'Chybí data' });
   try {
+    const axios = require('axios');
+    const FormData = require('form-data');
+
     const imgResponse = await fetch(image_url);
     const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
-    const imgBase64 = imgBuffer.toString('base64');
 
-    const FormData = require('form-data');
     const form = new FormData();
-    form.append('image', imgBase64);
+    form.append('image', imgBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
     form.append('prompt', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration');
     form.append('negative_prompt', 'ugly, blurry, low quality, realistic photo');
     form.append('strength', '0.7');
     form.append('output_format', 'jpeg');
     form.append('mode', 'image-to-image');
 
-    const response = await fetch(
+    const response = await axios.post(
       'https://api.stability.ai/v2beta/stable-image/generate/sd3',
+      form,
       {
-        method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.STABILITY_API_KEY}`,
           'Accept': 'application/json',
           ...form.getHeaders()
-        },
-        body: form
+        }
       }
     );
 
-    const data = await response.json();
-    if (!data.image) return res.status(500).json({ error: 'Generování selhalo', detail: data });
-    res.json({ image_base64: data.image });
+    if (!response.data.image) return res.status(500).json({ error: 'Generování selhalo', detail: response.data });
+    res.json({ image_base64: response.data.image });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.response?.data || err.message });
   }
 });
 module.exports = router;
