@@ -60,8 +60,8 @@ router.post('/fantasy-image', async (req, res) => {
             { text: 'ugly, blurry, low quality, realistic photo, modern', weight: -1 }
           ],
           cfg_scale: 7,
-          height: 768,
-          width: 512,
+          height: 1024,
+          width: 1024,
           steps: 30,
           samples: 1
         })
