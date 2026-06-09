@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
-// Analýza stromu přes Anthropic
 router.post('/analyze', async (req, res) => {
   const { image_base64, image_mime, location } = req.body;
-
+  if (!image_base64) return res.status(400).json({ error: 'Chybí obrázek' });
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -14,65 +13,69 @@ router.post('/analyze', async (req, res) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-5',
+        model: 'claude-opus-4-5-20251101',
         max_tokens: 1000,
         messages: [{
           role: 'user',
           content: [
             {
               type: 'image',
-              source: { type: 'base64', media_type: image_mime, data: image_base64 }
+              source: { type: 'base64', media_type: 'image/jpeg', data: image_base64 }
             },
             {
               type: 'text',
-              text: `Jsi expert na stromy a fantasy spisovatel. Lokalita: "${location || 'neznámá'}". Vrať POUZE JSON:
-{"species":"vědecký a český název","title":"epický název max 6 slov","age_estimate":"odhad věku","power_score":55,"power_reason":"1 věta","epic_description":"3-4 věty poeticky","fun_fact":"1 zajímavost","image_prompt":"english Stable Diffusion prompt for magical fantasy version of this tree"}`
+              text: `Jsi expert na stromy. Lokalita: "${location || 'neznámá'}". Vrať POUZE JSON bez textu okolo: {"species":"název","title":"epický název max 6 slov česky","age_estimate":"odhad věku","power_score":55,"power_reason":"1 věta","epic_description":"3-4 věty poeticky česky","fun_fact":"1 zajímavost","image_prompt":"english SD prompt for magical fantasy version of this exact tree, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration"}`
             }
           ]
         }]
       })
     });
-
     const data = await response.json();
+    if (data.error) return res.status(500).json({ error: data.error.message });
     const text = data.content.map(i => i.text || '').join('');
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return res.status(500).json({ error: 'AI nevrátila JSON' });
+    if (!match) return res.status(500).json({ error: 'AI nevrátila JSON', raw: text });
     res.json(JSON.parse(match[0]));
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Generování magického obrázku
-router.post('/magic-image', async (req, res) => {
-  const { prompt } = req.body;
-
+router.post('/fantasy-image', async (req, res) => {
+  const { image_base64, prompt } = req.body;
+  if (!image_base64 || !prompt) return res.status(400).json({ error: 'Chybí data' });
   try {
+    const FormData = require('form-data');
+    const form = new FormData();
+
+    const imageBuffer = Buffer.from(image_base64, 'base64');
+    form.append('init_image', imageBuffer, { filename: 'tree.jpg', contentType: 'image/jpeg' });
+    form.append('init_image_mode', 'IMAGE_STRENGTH');
+    form.append('image_strength', '0.35');
+    form.append('text_prompts[0][text]', prompt + ', magical fantasy art, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed');
+    form.append('text_prompts[0][weight]', '1');
+    form.append('text_prompts[1][text]', 'ugly, blurry, low quality, realistic photo');
+    form.append('text_prompts[1][weight]', '-1');
+    form.append('cfg_scale', '7');
+    form.append('samples', '1');
+    form.append('steps', '30');
+
     const response = await fetch(
-      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
+      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
       {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.STABILITY_API_KEY}`,
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          ...form.getHeaders()
         },
-        body: JSON.stringify({
-          text_prompts: [
-            { text: prompt, weight: 1 },
-            { text: 'ugly, blurry, low quality', weight: -1 }
-          ],
-          cfg_scale: 7, height: 768, width: 512, steps: 30, samples: 1
-        })
+        body: form
       }
     );
 
     const data = await response.json();
-    const b64 = data.artifacts?.[0]?.base64;
-    if (!b64) return res.status(500).json({ error: 'Generování selhalo' });
-    res.json({ image_base64: b64 });
-
+    if (!data.artifacts?.[0]?.base64) return res.status(500).json({ error: 'Generování selhalo', detail: data });
+    res.json({ image_base64: data.artifacts[0].base64 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

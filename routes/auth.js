@@ -13,11 +13,12 @@ router.post('/register', async (req, res) => {
   if (!email || !password || !username)
     return res.status(400).json({ error: 'Vyplň všechna pole' });
 
-  const { data, error } = await supabase.auth.admin.createUser({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    email_confirm: false,
-    user_metadata: { username }
+    options: {
+      data: { username }
+    }
   });
 
   if (error) return res.status(400).json({ error: error.message });
@@ -36,7 +37,6 @@ router.post('/login', async (req, res) => {
   res.json({
     token: data.session.access_token,
     user: data.user,
-    profile: data.user.user_metadata
   });
 });
 
