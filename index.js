@@ -36,13 +36,14 @@ const aiLimiter = rateLimit({
 
 app.use(globalLimiter);
 app.use('/ai', aiLimiter);
+app.use('/tank', aiLimiter);
 
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/trees', require('./routes/trees'));
 app.use('/ai', require('./routes/ai'));
 app.use('/votes', require('./routes/votes'));
-
+app.use('/tank', require('./routes/tank'));
 app.get('/', (req, res) => res.json({ status: 'TreeQuest API running 🌿' }));
 
 const PORT = process.env.PORT || 3000;
