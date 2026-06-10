@@ -11,9 +11,24 @@ cloudinary.config({
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
+// Max velikost base64 obrázku (cca 7MB raw = 10MB base64)
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_PROMPT_LENGTH = 500;
+const MAX_LOCATION_LENGTH = 200;
+
 router.post('/analyze', async (req, res) => {
   const { image_base64, image_mime, location } = req.body;
-  if (!image_base64) return res.status(400).json({ error: 'Chybí obrázek' });
+
+  // Validace
+  if (!image_base64 || typeof image_base64 !== 'string') return res.status(400).json({ error: 'Chybí obrázek' });
+  if (image_base64.length > MAX_IMAGE_SIZE) return res.status(413).json({ error: 'Obrázek je příliš velký' });
+  if (location && (typeof location !== 'string' || location.length > MAX_LOCATION_LENGTH)) {
+    return res.status(400).json({ error: 'Neplatná lokace' });
+  }
+
+  // Vyčisti lokaci od potenciálně škodlivých znaků (prompt injection ochrana)
+  const safeLocation = (location || 'neznámá').replace(/[<>{}\\]/g, '').slice(0, MAX_LOCATION_LENGTH);
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -34,7 +49,7 @@ router.post('/analyze', async (req, res) => {
             },
             {
               type: 'text',
-              text: `Jsi expert na stromy. Lokalita: "${location || 'neznámá'}". Vrať POUZE JSON bez textu okolo: {"species":"název","title":"epický název max 6 slov česky","age_estimate":"odhad věku","power_score":55,"power_reason":"1 věta","epic_description":"3-4 věty poeticky česky","fun_fact":"1 zajímavost","image_prompt":"english SD prompt for magical fantasy version of this exact tree, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration"}`
+              text: `Jsi expert na stromy. Lokalita: "${safeLocation}". Vrať POUZE JSON bez textu okolo: {"species":"název","title":"epický název max 6 slov česky","age_estimate":"odhad věku","power_score":55,"power_reason":"1 věta","epic_description":"3-4 věty poeticky česky","fun_fact":"1 zajímavost","image_prompt":"english SD prompt for magical fantasy version of this exact tree, glowing ethereal light, ancient mystical aura, dramatic lighting, highly detailed fantasy illustration"}`
             }
           ]
         }]
@@ -53,7 +68,17 @@ router.post('/analyze', async (req, res) => {
 
 router.post('/fantasy-image', async (req, res) => {
   const { image_url, prompt, tree_level, tree_id } = req.body;
-  if (!prompt) return res.status(400).json({ error: 'Chybí data' });
+
+  // Validace
+  if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: 'Chybí prompt' });
+  if (prompt.length > MAX_PROMPT_LENGTH) return res.status(400).json({ error: 'Prompt je příliš dlouhý' });
+  if (tree_level !== undefined && (typeof tree_level !== 'number' || tree_level < 0 || tree_level > 100)) {
+    return res.status(400).json({ error: 'Neplatný level' });
+  }
+  if (tree_id && typeof tree_id !== 'string') return res.status(400).json({ error: 'Neplatné tree_id' });
+
+  // Vyčisti prompt
+  const safePrompt = prompt.replace(/[<>{}\\]/g, '').slice(0, MAX_PROMPT_LENGTH);
 
   const level = tree_level || 0;
   const levelKey = level < 20 ? 0 : level < 40 ? 20 : level < 60 ? 40 : level < 80 ? 60 : level < 100 ? 80 : 100;
@@ -81,7 +106,7 @@ router.post('/fantasy-image', async (req, res) => {
         },
         body: JSON.stringify({
           text_prompts: [
-            { text: prompt + ', ' + levelStyle + ', fantasy art, highly detailed illustration, epic tree', weight: 1 },
+            { text: safePrompt + ', ' + levelStyle + ', fantasy art, highly detailed illustration, epic tree', weight: 1 },
             { text: 'ugly, blurry, low quality, realistic photo, modern', weight: -1 }
           ],
           cfg_scale: 7,
@@ -98,19 +123,12 @@ router.post('/fantasy-image', async (req, res) => {
 
     const imageBase64 = data.artifacts[0].base64;
 
-    // Uložit na Cloudinary
-    const cloudinary = require('cloudinary').v2;
-    cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
-    });
-    const uploadResult = await cloudinary.uploader.upload(`data:image/jpeg;base64,${imageBase64}`, { folder: 'treequest/fantasy' });
+    const uploadResult = await cloudinary.uploader.upload(
+      `data:image/jpeg;base64,${imageBase64}`,
+      { folder: 'treequest/fantasy' }
+    );
 
-    // Uložit URL do Supabase
     if (tree_id) {
-      const { createClient } = require('@supabase/supabase-js');
-      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
       await supabase.from('trees').update({ [dbColumn]: uploadResult.secure_url }).eq('id', tree_id);
     }
 
