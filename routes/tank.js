@@ -36,10 +36,9 @@ function computeCurrentWater(profile) {
   return { newWater, newLastRefill, tankMax, intervalMs };
 }
 
-// ── GET /tank/status?user_id=xxx ───────────────────────────
+// ── GET /tank/status ───────────────────────────────────────
 router.get('/status', async (req, res) => {
-  const { user_id } = req.query;
-  if (!user_id) return res.status(400).json({ error: 'Chybí user_id' });
+  const user_id = req.user_id;
 
   const { data: profile, error } = await supabase
     .from('profiles')
@@ -73,8 +72,7 @@ router.get('/status', async (req, res) => {
 
 // ── POST /tank/instant-refill ──────────────────────────────
 router.post('/instant-refill', async (req, res) => {
-  const { user_id } = req.body;
-  if (!user_id) return res.status(400).json({ error: 'Chybí user_id' });
+  const user_id = req.user_id;
 
   const { data: profile, error } = await supabase
     .from('profiles')
@@ -103,8 +101,7 @@ router.post('/instant-refill', async (req, res) => {
 
 // ── POST /tank/upgrade-tank ────────────────────────────────
 router.post('/upgrade-tank', async (req, res) => {
-  const { user_id } = req.body;
-  if (!user_id) return res.status(400).json({ error: 'Chybí user_id' });
+  const user_id = req.user_id;
 
   const { data: profile, error } = await supabase
     .from('profiles')
@@ -138,8 +135,7 @@ router.post('/upgrade-tank', async (req, res) => {
 
 // ── POST /tank/upgrade-pump ────────────────────────────────
 router.post('/upgrade-pump', async (req, res) => {
-  const { user_id } = req.body;
-  if (!user_id) return res.status(400).json({ error: 'Chybí user_id' });
+  const user_id = req.user_id;
 
   const { data: profile, error } = await supabase
     .from('profiles')
@@ -174,8 +170,9 @@ router.post('/upgrade-pump', async (req, res) => {
 
 // ── POST /tank/add-resin (debug / budoucí IAP) ─────────────
 router.post('/add-resin', async (req, res) => {
-  const { user_id, amount } = req.body;
-  if (!user_id || !amount || typeof amount !== 'number' || amount <= 0)
+  const user_id = req.user_id;
+  const { amount } = req.body;
+  if (!amount || typeof amount !== 'number' || amount <= 0)
     return res.status(400).json({ error: 'Neplatná data' });
   if (amount > 10000)
     return res.status(400).json({ error: 'Příliš mnoho pryskyřice' });

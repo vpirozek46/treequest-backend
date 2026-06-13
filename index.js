@@ -38,12 +38,14 @@ app.use(globalLimiter);
 app.use('/ai', aiLimiter);
 app.use('/tank', aiLimiter);
 
-// Routes
+const authMiddleware = require('./middleware/auth');
+
+// Routes — /auth/register a /auth/login jsou veřejné, zbytek chráněn JWT
 app.use('/auth', require('./routes/auth'));
-app.use('/trees', require('./routes/trees'));
-app.use('/ai', require('./routes/ai'));
-app.use('/votes', require('./routes/votes'));
-app.use('/tank', require('./routes/tank'));
+app.use('/trees', authMiddleware, require('./routes/trees'));
+app.use('/ai', authMiddleware, require('./routes/ai'));
+app.use('/votes', authMiddleware, require('./routes/votes'));
+app.use('/tank', authMiddleware, require('./routes/tank'));
 app.get('/', (req, res) => res.json({ status: 'TreeQuest API running 🌿' }));
 
 const PORT = process.env.PORT || 3000;

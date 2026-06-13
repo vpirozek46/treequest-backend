@@ -16,6 +16,12 @@ const supabase = createClient(
 
 const VALID_RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 
+const MAX_TITLE_LENGTH = 100;
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_SPECIES_LENGTH = 100;
+const MAX_LOCATION_LENGTH = 200;
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
 // ── Passive resin generování ──────────────────────────────
 const RARITY_MULTIPLIER = {
   Common: 0.1,
@@ -32,6 +38,7 @@ const FANTASY_LEVEL_MULTIPLIER = {
   3: 3,
   4: 4,
   5: 6,
+  6: 10,
 };
 
 const MAX_ACCUMULATION_HOURS = 24;
@@ -115,8 +122,17 @@ router.post('/', async (req, res) => {
     title, species, description, age_estimate,
     location_name, lat, lng, photo_base64,
     magic_photo_url, power_score, image_prompt,
-    rarity, user_id
+    rarity
   } = req.body;
+  const user_id = req.user_id;
+
+  if (photo_base64 && photo_base64.length > MAX_IMAGE_SIZE)
+    return res.status(413).json({ error: 'Obrázek je příliš velký' });
+
+  const safeTitle = (title || '').replace(/[<>{}\\]/g, '').slice(0, MAX_TITLE_LENGTH);
+  const safeSpecies = (species || '').replace(/[<>{}\\]/g, '').slice(0, MAX_SPECIES_LENGTH);
+  const safeDescription = (description || '').replace(/[<>{}\\]/g, '').slice(0, MAX_DESCRIPTION_LENGTH);
+  const safeLocation = (location_name || '').replace(/[<>{}\\]/g, '').slice(0, MAX_LOCATION_LENGTH);
 
   let photo_url = null;
   if (photo_base64) {
@@ -129,12 +145,15 @@ router.post('/', async (req, res) => {
 
   const level = getLevel(power_score || 0);
   const safeRarity = VALID_RARITIES.includes(rarity) ? rarity : 'Common';
+  const safePower = Math.min(100, Math.max(0, Number(power_score) || 0));
 
   const { data, error } = await supabase.from('trees').insert({
-    user_id, title, species, description, age_estimate,
-    location_name, lat: lat || null, lng: lng || null,
+    user_id,
+    title: safeTitle, species: safeSpecies, description: safeDescription,
+    age_estimate: age_estimate || null,
+    location_name: safeLocation, lat: lat || null, lng: lng || null,
     photo_url, magic_photo_url,
-    power_score: power_score || 0,
+    power_score: safePower,
     level, image_prompt,
     rarity: safeRarity,
     fantasy_level: 0,
@@ -148,8 +167,7 @@ router.post('/', async (req, res) => {
 
 // ── Vyzvednout nastřádanou pryskyřici ──
 router.post('/:id/collect-resin', async (req, res) => {
-  const { user_id } = req.body;
-  if (!user_id) return res.status(400).json({ error: 'Chybí user_id' });
+  const user_id = req.user_id;
 
   const { data: tree, error: treeErr } = await supabase
     .from('trees')

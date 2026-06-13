@@ -99,7 +99,8 @@ async function addResinNoCap(userId, amount) {
 
 // ── POST /votes/vote ──
 router.post('/vote', async (req, res) => {
-  const { user_id, tree_id } = req.body;
+  const { tree_id } = req.body;
+  const user_id = req.user_id;
 
   const { data: tree, error: treeErr } = await supabase
     .from('trees')
@@ -140,7 +141,8 @@ router.post('/vote', async (req, res) => {
 
 // ── POST /votes/water (cooldown 24h + tank + pryskyřice) ──
 router.post('/water', async (req, res) => {
-  const { user_id, tree_id } = req.body;
+  const { tree_id } = req.body;
+  const user_id = req.user_id;
 
   // Načti profil (tank)
   const { data: profile, error: profileError } = await supabase

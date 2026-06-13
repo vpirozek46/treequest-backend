@@ -77,13 +77,15 @@ router.post('/fantasy-image', async (req, res) => {
   }
   if (tree_id && typeof tree_id !== 'string') return res.status(400).json({ error: 'Neplatné tree_id' });
 
-  // Pokud máme tree_id, načti rarity ze DB pro jistotu
+  // Pokud máme tree_id, načti rarity + ověř vlastnictví
   let treeRarity = rarity || 'Common';
   if (tree_id) {
-    const { data: tree } = await supabase.from('trees').select('rarity, power_score').eq('id', tree_id).single();
+    const { data: tree } = await supabase.from('trees').select('rarity, power_score, user_id').eq('id', tree_id).single();
     if (tree) {
+      if (tree.user_id !== req.user_id) {
+        return res.status(403).json({ error: 'Nemůžeš generovat fantasy pro cizí strom' });
+      }
       treeRarity = tree.rarity || 'Common';
-      // Validace: power_score musí být dost vysoké pro tento level
       const level = tree_level || 0;
       const requiredPower = level < 20 ? 0 : level < 40 ? 20 : level < 60 ? 40 : level < 80 ? 60 : level < 100 ? 80 : 100;
       if (tree.power_score < requiredPower) {
@@ -97,6 +99,8 @@ router.post('/fantasy-image', async (req, res) => {
   const level = tree_level || 0;
   const levelKey = level < 20 ? 0 : level < 40 ? 20 : level < 60 ? 40 : level < 80 ? 60 : level < 100 ? 80 : 100;
   const dbColumn = `fantasy_img_${levelKey}`;
+  // fantasy_level v DB: levelKey/20 + 1 (level 1-5), nebo 6 pro božský level
+  const newFantasyLevel = levelKey === 100 ? 6 : levelKey / 20 + 1;
 
   // Style podle levelu
   const levelStyle = level < 20
@@ -107,7 +111,9 @@ router.post('/fantasy-image', async (req, res) => {
     ? 'powerful ancient magic, bright glowing leaves, magical creatures nearby, dramatic lighting, enchanted forest'
     : level < 80
     ? 'epic fantasy tree, intense magical energy, golden and purple aura, floating magical particles, legendary ancient spirit'
-    : 'ultimate legendary tree, godlike magical power, blinding divine light, massive ethereal crown, celestial energy, mythical beings surrounding it, most epic fantasy illustration possible';
+    : level < 100
+    ? 'ultimate legendary tree, godlike magical power, blinding divine light, massive ethereal crown, celestial energy, mythical beings surrounding it, most epic fantasy illustration possible'
+    : 'absolute divine transcendent world-tree, omega-level cosmic power, universe within the crown, stars and galaxies woven into branches, pure blinding divine light beyond all description, reality warping magic, celestial beings kneeling around it, the tree of all creation, impossibly majestic and awe-inspiring, beyond legendary in every way';
 
   // Style podle rarity (přidá unikátní charakter)
   const rarityStyle = {
@@ -153,8 +159,6 @@ router.post('/fantasy-image', async (req, res) => {
     );
 
     if (tree_id) {
-      // Update fantasy_img sloupec + fantasy_level pokud je novější
-      const newFantasyLevel = levelKey / 20; // 0, 1, 2, 3, 4, 5
       await supabase.from('trees').update({
         [dbColumn]: uploadResult.secure_url,
         fantasy_level: newFantasyLevel,
