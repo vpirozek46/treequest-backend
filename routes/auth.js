@@ -118,7 +118,16 @@ router.post('/daily-bonus', authMiddleware, async (req, res) => {
 
   const isConsecutive = lastBonus > 0 && (now - lastBonus) < 2 * dayMs;
   const newStreak = isConsecutive ? (profile.login_streak || 1) + 1 : 1;
-  const bonus = 5 + Math.min(5, newStreak - 1); // base 5🌿 + streak bonus až +5
+
+  let bonus = 5;
+  let streakBonus = 0;
+  if (newStreak % 30 === 0) {
+    streakBonus = 100;
+  } else if (newStreak % 7 === 0) {
+    streakBonus = 25;
+  }
+  bonus += streakBonus;
+
   const newResin = (profile.resin || 0) + bonus;
 
   await supabase.from('profiles').update({
@@ -127,7 +136,7 @@ router.post('/daily-bonus', authMiddleware, async (req, res) => {
     login_streak: newStreak,
   }).eq('id', user_id);
 
-  res.json({ already_claimed: false, bonus, streak: newStreak, resin: newResin });
+  res.json({ already_claimed: false, bonus, streak_bonus: streakBonus, streak: newStreak, resin: newResin });
 });
 
 module.exports = router;
