@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const cloudinary = require('cloudinary').v2;
+const incrementQuest = require('../lib/questProgress');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -162,6 +163,10 @@ router.post('/', async (req, res) => {
   }).select().single();
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Quest: vyfoť 3 nové stromy
+  incrementQuest(supabase, user_id, 'photo_trees');
+
   res.json(data);
 });
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
+const incrementQuest = require('../lib/questProgress');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -127,7 +128,8 @@ router.post('/vote', async (req, res) => {
   let resinReward = { added: 0, cap_reached: false };
   if (tree.user_id !== user_id) {
     resinReward = await addSocialResin(user_id, RESIN_FOR_VOTING_OTHER);
-    // Majitel stromu nedostane nic za hlas (RESIN_WHEN_YOUR_TREE_VOTED = 0)
+    // Quest: majitel stromu sbírá hlasy (collect_votes)
+    incrementQuest(supabase, tree.user_id, 'collect_votes');
   }
 
   res.json({
@@ -200,10 +202,10 @@ router.post('/water', async (req, res) => {
   // Pryskyřice
   let resinReward = { added: 0, cap_reached: false };
   if (tree.user_id !== user_id) {
-    // Zalévající dostane odměnu (s cap)
     resinReward = await addSocialResin(user_id, RESIN_FOR_WATERING_OTHER);
-    // Majitel stromu dostane bonus (bez cap - to není sociální farma)
     await addResinNoCap(tree.user_id, RESIN_WHEN_YOUR_TREE_WATERED);
+    // Quest: zalévající plní "Zalij 10× cizí strom"
+    incrementQuest(supabase, user_id, 'water_trees');
   }
 
   res.json({
