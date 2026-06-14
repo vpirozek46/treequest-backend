@@ -46,6 +46,7 @@ app.use('/trees', authMiddleware, require('./routes/trees'));
 app.use('/ai', authMiddleware, require('./routes/ai'));
 app.use('/votes', authMiddleware, require('./routes/votes'));
 app.use('/tank', authMiddleware, require('./routes/tank'));
+app.use('/shop', authMiddleware, require('./routes/shop'));
 app.get('/', (req, res) => res.json({ status: 'TreeQuest API running 🌿' }));
 
 const PORT = process.env.PORT || 3000;
