@@ -37,12 +37,21 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email, password
-  });
-
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return res.status(401).json({ error: 'Špatný email nebo heslo' });
-  res.json({ token: data.session.access_token, user: data.user });
+
+  // Přidej onboarding_done do response — frontend se podle toho rozhodne kam navigovat
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('onboarding_done')
+    .eq('id', data.user.id)
+    .single();
+
+  res.json({
+    token: data.session.access_token,
+    user: data.user,
+    onboarding_done: profile?.onboarding_done || false,
+  });
 });
 
 // Načti profil
@@ -94,6 +103,12 @@ router.put('/username', authMiddleware, async (req, res) => {
   const { error } = await supabase.from('profiles').update({ username: safe }).eq('id', user_id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ username: safe });
+});
+
+// Dokončení onboardingu
+router.post('/complete-onboarding', authMiddleware, async (req, res) => {
+  await supabase.from('profiles').update({ onboarding_done: true }).eq('id', req.user_id);
+  res.json({ success: true });
 });
 
 // Denní login bonus
